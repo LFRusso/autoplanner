@@ -16,6 +16,7 @@ class Grid:
         self.net = network
         self.cell_coords = []
         self.edge_sets = {}
+        self.edge_travel_time = {}
 
         # Number of lines and columns based on cell size
         self.lines = int(np.ceil(height/cell_size))
@@ -26,15 +27,23 @@ class Grid:
         for i in range(self.lines):
             for j in range(self.columns):
                 self.cells[i,j] = Cell((j*cell_size + cell_size/2, i*cell_size + cell_size/2))
-        self.getMeshDistances()
+        for e in self.net.edges.values():
+            self.edge_sets[e] = []
+        self._getMeshDistances()
+        self._getMeshTravelTimes()
         print(f"{self.lines*self.columns} ({self.lines}x{self.columns}) cells built in {time.time() - start}s")
+        print("Calculating cell scores...")
+        start = time.time()
+        self._getCellScores()
+        print(f"Finished calculating scores in {time.time()-start}s")
         return
         
     def plotGrid(self, links=False):
+        max_score = min([c.score for c in self.cells.flatten()])
         for i in range(self.lines):
             for j in range(self.columns):
                 plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
-                                    self.cell_size, self.cell_size, ec="gray", fc="white", alpha=.2))
+                                    self.cell_size, self.cell_size, ec="gray", fc=(1.-max_score/self.cells[i,j].score,1.,1.-max_score/self.cells[i,j].score), alpha=.5))
         
         if (links):
             for i in range(self.lines):
@@ -42,7 +51,39 @@ class Grid:
                     plt.plot([self.cells[i,j].x, self.cells[i,j].linked_position[0]], [self.cells[i,j].y, self.cells[i,j].linked_position[1]])
         return
 
-    def getMeshDistances(self): # Approximation using closest node
+    def _getCellScores(self):
+        flattened_cells = self.cells.flatten()
+        scores = np.zeros(len(flattened_cells))
+        sum_Te = sum(self.edge_travel_time.values())
+        card_C = len(flattened_cells)
+        for c in tqdm(flattened_cells, total=card_C):
+            c_score = 0
+
+            card_Cec = len(self.edge_sets[c.linked_edge])
+            c_score += (card_Cec + 1) * c.mesh_distance
+            c_score += self.distance(c.linked_position, c.linked_edge.to_node.position) / c.linked_edge.speed
+            
+            sum_terms = sum_Te - self.edge_travel_time[c.linked_edge]
+            for e, e_set in self.edge_sets.items():
+                if e != c.linked_edge:
+                    term = self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[e.from_node.label]]
+                    if (term != np.Inf and term != 0):
+                        term *= len(e_set)
+                        sum_terms += term
+       
+            sum_terms = ( 1/(card_C - card_Cec) ) * sum_terms
+            c_score += sum_terms
+            c.setScore(c_score)
+        return
+
+    def _getMeshTravelTimes(self):
+        for e in self.net.edges.values():
+            Ce = self.edge_sets[e]
+            Te = np.sum([self.distance(e.from_node.position, c.linked_position)/e.speed + c.mesh_distance for c in Ce])
+            self.edge_travel_time[e] = Te
+        return
+
+    def _getMeshDistances(self): # Approximation using closest node
         print("Calculating cell-network distances...")
         flattened_cells = self.cells.flatten()
         cell_coords = [c.position for c in flattened_cells]
@@ -56,10 +97,7 @@ class Grid:
             neighboring_edges = n.out_edges + n.in_edges
             x, y, d, e = self.closestEdgeDistance(c, neighboring_edges)
             
-            if e not in self.edge_sets.keys():
-                self.edge_sets[e] = [c]
-            else:
-                self.edge_sets[e].append(c)
+            self.edge_sets[e].append(c)
             c.setMeshLink((x, y), e, d)
         return
 

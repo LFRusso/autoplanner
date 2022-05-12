@@ -3,6 +3,7 @@ class Cell:
         self.x = pos[0]
         self.y = pos[1]
         self.position = pos
+        self.score = 0
         return
 
     def setMeshLink(self, P, e, d=None):
@@ -14,7 +15,8 @@ class Cell:
         self.linked_edge = e
         return
 
-    def setValue(self):
+    def setScore(self, score):
+        self.score = score
         return
 
     def distance(self, u, v):

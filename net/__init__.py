@@ -32,7 +32,7 @@ class Net:
         self.edges[label] = Edge(from_node, to_node, lenght, speed, label)
         from_node.setOutEdge(self.edges[label])
         to_node.setInEdge(self.edges[label])        
-        self.graph.append([self.node_map[from_node.label], self.node_map[to_node.label], lenght])
+        self.graph.append([self.node_map[from_node.label], self.node_map[to_node.label], lenght/speed])
         return
     
     def getDistMatrix(self):
