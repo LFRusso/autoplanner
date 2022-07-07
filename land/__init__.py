@@ -56,6 +56,7 @@ class Grid:
         scores = np.zeros(len(flattened_cells))
         sum_Te = sum(self.edge_travel_time.values())
         card_C = len(flattened_cells)
+        set_sizes = np.array([len(e_set) for e_set in self.edge_sets.values()])
         for c in tqdm(flattened_cells, total=card_C):
             c_score = 0
 
@@ -64,16 +65,16 @@ class Grid:
             c_score += self.distance(c.linked_position, c.linked_edge.to_node.position) / c.linked_edge.speed
             
             sum_terms = sum_Te - self.edge_travel_time[c.linked_edge]
-            for e, e_set in self.edge_sets.items():
-                if e != c.linked_edge:
-                    term = self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[e.from_node.label]]
-                    if (term != np.Inf and term != 0):
-                        term *= len(e_set)
-                        sum_terms += term
-       
+            net_distances = np.array([self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[e.from_node.label]] for e in self.net.edges.values()])
+            sum_terms += (set_sizes*net_distances).sum()
+            sum_terms -= len(self.edge_sets[c.linked_edge]) * self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[c.linked_edge.from_node.label]]
+            
             sum_terms = ( 1/(card_C - card_Cec) ) * sum_terms
             c_score += sum_terms
+
+            #c_score = self.edge_travel_time[c.linked_edge]
             c.setScore(c_score)
+            #print(self.edge_travel_time[c.linked_edge], c_score)
         return
 
     def _getMeshTravelTimes(self):
@@ -132,3 +133,7 @@ class Grid:
 
     def distance(self, u, v):
         return np.linalg.norm(np.array(u)-np.array(v))
+
+    def cell2CellDist(self, cell_i, cell_j):
+
+        return

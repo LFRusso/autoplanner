@@ -29,7 +29,11 @@ class Net:
         return
 
     def addEdge(self, from_node, to_node, lenght, speed, label):
-        self.edges[label] = Edge(from_node, to_node, lenght, speed, label)
+        new_edge = Edge(from_node, to_node, lenght, speed, label)
+        if (new_edge in self.edges.values()):
+            return
+
+        self.edges[label] = new_edge
         from_node.setOutEdge(self.edges[label])
         to_node.setInEdge(self.edges[label])        
         self.graph.append([self.node_map[from_node.label], self.node_map[to_node.label], lenght/speed])
@@ -40,7 +44,22 @@ class Net:
         matrix_form = csr_matrix( (data, (row, col)), shape=( len(self.nodes), len(self.nodes) ) )
         
         self.dist_matrix = dijkstra(csgraph=matrix_form, directed=True, return_predecessors=False)
+
         return self.dist_matrix
+
+    # Adds auxiliary edges to ensure for all vertices v_i, v_j in V, if e_m = (v_i, v_j) is an edge,
+    # there has to be an edge of opposite direction e_n = (v_j, v_i) (network is strongly connected)
+    def enforceStronglyConnected(self):
+        for vi in self.nodes.values():
+            for em in vi.out_edges:
+                vj = em.to_node
+                found_return = False
+                for en in vj.out_edges:
+                    if (en.to_node == vi): # Return edge found, nothing added
+                        found_return = True
+                # No return edge found, adding
+                if (found_return == False):
+                    self.addEdge(vj, vi, em.lenght, 1, f"rev_{em.label}")
 
     def XY2LonLat(self, x, y):
         x_off, y_off = self.offset
@@ -57,10 +76,7 @@ class Net:
         plt.axis("equal")
 
 
-def distance(u, v):
-    return np.linalg.norm(np.array(u)-np.array(v))
-
-def loadNetSumo(netfile):
+def loadNetSumo(netfile, geometry_nodes=True):
     start = time.time()
     print("Building road network...")
 
@@ -70,21 +86,26 @@ def loadNetSumo(netfile):
     node_objs = sumo_net.getNodes()
     edge_objs = sumo_net.getEdges()
 
+    # All original nodes are added
     for n in node_objs:
         net.addNode(n.getCoord(), n.getID(), geometry_point=False)
 
-    # Incorporating geometry points to the edge list
+    # Incorporating geometry points to the edge list 
+    # Edges with geometry are replaced with a set of edge and geometry points are added
     removed_edges = []
     for e in edge_objs:
         shape = e.getRawShape()
-        if (len(shape)>2):
+        if (len(shape)>2): # contains more than one line segment
+
+            # Points of the edge geometry are added as new geometry nodes
             new_nodes_labels = [f"gnode_{e.getID()}_{i}" for i in range(len(shape[1:-1]))]
             for n_label, n_pos in zip(new_nodes_labels, shape[1:-1]):
                 net.addNode(n_pos, n_label, geometry_point=True)
 
-            lenghts = [distance(shape[i], shape[i+1]) for i in range(len(shape)-1)]
+            # Creating new edges by dividing the pre existing edge with geometry
+            # New edges have only one line segment
+            lenghts = [np.linalg.norm(np.array(shape[i]) - np.array(shape[i+1])) for i in range(len(shape)-1)]
             speeds = [e.getSpeed() for i in range(len(shape)-1)]
-            
             new_edges = [(new_nodes_labels[i],new_nodes_labels[i+1]) for i in 
                         range(len(new_nodes_labels)-1)]
             new_edges = [(e.getFromNode().getID(), new_nodes_labels[0])] + new_edges +[(new_nodes_labels[-1], e.getToNode().getID())]
@@ -93,12 +114,15 @@ def loadNetSumo(netfile):
                 net.addEdge(net.nodes[new_edges[i][0]], net.nodes[new_edges[i][1]], lenghts[i],
                             speeds[i], f"gedge_{e.getID()}_{i}")
             
+            # After being splitted, original edge is removed
             removed_edges.append(e)
     edge_objs = [e for e in edge_objs if e not in removed_edges]
 
     for e in edge_objs:
         net.addEdge(net.nodes[e.getFromNode().getID()], net.nodes[e.getToNode().getID()],
                     e.getLength(), e.getSpeed(), e.getID())
+
+    net.enforceStronglyConnected()
     print(f"Building road network completed in {time.time() - start}s!")
     
     start = time.time()
