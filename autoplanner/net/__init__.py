@@ -11,10 +11,11 @@ from .node import Node
 from .edge import Edge
 
 class Net:
-    def __init__(self, offset, boundary, projection_parameters):
+    def __init__(self, offset, boundary, projection_parameters, v0=1):
         self.offset = offset
         self.boundary = boundary
         self.projection = pyproj.Proj(projparams=projection_parameters)
+        self.v0 = v0
 
         self.nodes = {}
         self.edges = {}
@@ -59,7 +60,7 @@ class Net:
                         found_return = True
                 # No return edge found, adding
                 if (found_return == False):
-                    self.addEdge(vj, vi, em.lenght, 1, f"rev_{em.label}")
+                    self.addEdge(vj, vi, em.lenght, self.v0, f"rev_{em.label}")
 
     def XY2LonLat(self, x, y):
         x_off, y_off = self.offset
@@ -76,12 +77,12 @@ class Net:
         plt.axis("equal")
 
 
-def loadNetSumo(netfile, geometry_nodes=True):
+def loadNetSumo(netfile, geometry_nodes=True, v0=1):
     start = time.time()
     print("Building road network...")
 
     sumo_net = sumolib.net.readNet(netfile)
-    net = Net(sumo_net.getLocationOffset(), sumo_net.getBoundary(), sumo_net._location["projParameter"])    
+    net = Net(sumo_net.getLocationOffset(), sumo_net.getBoundary(), sumo_net._location["projParameter"], v0=v0)    
     
     node_objs = sumo_net.getNodes()
     edge_objs = sumo_net.getEdges()

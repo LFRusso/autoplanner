@@ -7,7 +7,7 @@ from tqdm import tqdm
 from .cell import Cell
 
 class Grid:
-    def __init__(self, width, height, cell_size, network=None):
+    def __init__(self, width, height, cell_size, network=None, walking_weight_from=1, walking_weight_to=1, searched_nodes=1):
         start = time.time()
         print("Building cells...")
         self.width = width
@@ -17,8 +17,11 @@ class Grid:
         self.cell_coords = []
         self.edge_sets = {}
         self.edge_travel_time = {}
+        self.walking_weight_from = walking_weight_from
+        self.walking_weight_to = walking_weight_to
 
-        # Number of lines and columns based on cell size
+
+        # Number of lines and columns in the grid based on cell size
         self.lines = int(np.ceil(height/cell_size))
         self.columns = int(np.ceil(width/cell_size))
         
@@ -26,10 +29,10 @@ class Grid:
         self.cells = np.empty((self.lines, self.columns), dtype=Cell)
         for i in range(self.lines):
             for j in range(self.columns):
-                self.cells[i,j] = Cell((j*cell_size + cell_size/2, i*cell_size + cell_size/2))
+                self.cells[i,j] = Cell((j*cell_size + cell_size/2, i*cell_size + cell_size/2), (i,j)) # 'Position' of the cell is set in its center
         for e in self.net.edges.values():
             self.edge_sets[e] = []
-        self._getMeshDistances()
+        self._getMeshDistances(searched_nodes) # Build edge_sets (cell neighborhoods) based on distance of each sell to each edge
         self._getMeshTravelTimes()
         print(f"{self.lines*self.columns} ({self.lines}x{self.columns}) cells built in {time.time() - start}s")
         print("Calculating cell scores...")
@@ -38,17 +41,25 @@ class Grid:
         print(f"Finished calculating scores in {time.time()-start}s")
         return
         
-    def plotGrid(self, links=False):
-        max_score = min([c.score for c in self.cells.flatten()])
-        for i in range(self.lines):
-            for j in range(self.columns):
-                plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
-                                    self.cell_size, self.cell_size, ec="gray", fc=(1.-max_score/self.cells[i,j].score,1.,1.-max_score/self.cells[i,j].score), alpha=.5))
-        
+    def plotGrid(self, accessibility=False, links=False):
+        max_score = max([c.score for c in self.cells.flatten()])
+        if (accessibility):
+            for i in range(self.lines):
+                for j in range(self.columns):
+                    plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
+                                        self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].score/max_score,1.,1.-self.cells[i,j].score/max_score), alpha=.5))
+        else:
+            for i in range(self.lines):
+                for j in range(self.columns):
+                    plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
+                                        self.cell_size, self.cell_size, ec="gray", fc=(1,1,1), alpha=.5))
+
         if (links):
             for i in range(self.lines):
                 for j in range(self.columns):
                     plt.plot([self.cells[i,j].x, self.cells[i,j].linked_position[0]], [self.cells[i,j].y, self.cells[i,j].linked_position[1]])
+                    #plt.text(self.cells[i,j].x, self.cells[i,j].y, f"{round(self.cells[i,j].score, 2)}", fontsize="x-small")
+
         return
 
     def _getCellScores(self):
@@ -58,44 +69,56 @@ class Grid:
         card_C = len(flattened_cells)
         set_sizes = np.array([len(e_set) for e_set in self.edge_sets.values()])
         for c in tqdm(flattened_cells, total=card_C):
-            c_score = 0
+            c_avg_time = 0
 
             card_Cec = len(self.edge_sets[c.linked_edge])
-            c_score += (card_Cec + 1) * c.mesh_distance
-            c_score += self.distance(c.linked_position, c.linked_edge.to_node.position) / c.linked_edge.speed
+            c_avg_time += card_C * c.mesh_distance**self.walking_weight_from
+            c_avg_time += (card_C - card_Cec) * self.distance(c.linked_position, c.linked_edge.to_node.position) / c.linked_edge.speed
             
-            sum_terms = sum_Te - self.edge_travel_time[c.linked_edge]
+            sum_terms = sum_Te
             net_distances = np.array([self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[e.from_node.label]] for e in self.net.edges.values()])
             sum_terms += (set_sizes*net_distances).sum()
-            sum_terms -= len(self.edge_sets[c.linked_edge]) * self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[c.linked_edge.from_node.label]]
+            c_avg_time += sum_terms
             
-            sum_terms = ( 1/(card_C - card_Cec) ) * sum_terms
-            c_score += sum_terms
+            c_avg_time -= len(self.edge_sets[c.linked_edge]) * self.net.dist_matrix[self.net.node_map[c.linked_edge.to_node.label], self.net.node_map[c.linked_edge.from_node.label]]
 
-            #c_score = self.edge_travel_time[c.linked_edge]
-            c.setScore(c_score)
-            #print(self.edge_travel_time[c.linked_edge], c_score)
+            # Slowest part 
+            c_avg_time += sum([self.distance(c.linked_position, ci.linked_position) / c.linked_edge.speed - self.distance(ci.linked_position, c.linked_edge.from_node.position) / c.linked_edge.speed for ci in self.edge_sets[c.linked_edge]])
+            
+            c_avg_time = c_avg_time/card_C
+            c.setAvgTime(c_avg_time)
+            c.setScore(1/c_avg_time)
         return
 
+    # Total travel time spent inside a given edge when travelling to all cells linked to it 
     def _getMeshTravelTimes(self):
         for e in self.net.edges.values():
             Ce = self.edge_sets[e]
-            Te = np.sum([self.distance(e.from_node.position, c.linked_position)/e.speed + c.mesh_distance for c in Ce])
+            Te = np.sum([self.distance(e.from_node.position, c.linked_position)/e.speed + c.mesh_distance**self.walking_weight_to/self.net.v0 for c in Ce])
             self.edge_travel_time[e] = Te
         return
 
-    def _getMeshDistances(self): # Approximation using closest node
+    # Calculates the distance of each cell in relation to the network by finding the closest edge to its center
+    def _getMeshDistances(self, n_nodes=1): 
         print("Calculating cell-network distances...")
         flattened_cells = self.cells.flatten()
         cell_coords = [c.position for c in flattened_cells]
         node_coords = [n.position for n in self.net.nodes.values()]
 
-        node_tree = cKDTree(node_coords)
-        d, idx = node_tree.query(cell_coords, 1)
+        # Tries to reduce the searched edges by looking only at those that connect the closest nodes
+        node_tree = cKDTree(node_coords) 
+        _, idx = node_tree.query(cell_coords, k=n_nodes, workers=-1)
         
         selected_nodes = np.array(list(self.net.nodes.values()))[idx]
-        for c, n in tqdm(zip(flattened_cells, selected_nodes), total=len(flattened_cells)):
-            neighboring_edges = n.out_edges + n.in_edges
+        for c, n_list in tqdm(zip(flattened_cells, selected_nodes), total=len(flattened_cells)):
+            if(isinstance(n_list, np.ndarray)): # When only one node is selected (n_nodes=1), the returned structure is not an array
+                neighboring_edges = []
+                for n in n_list:
+                    neighboring_edges += n.out_edges + n.in_edges
+            else:
+                neighboring_edges = n_list.out_edges + n_list.in_edges
+
+            neighboring_edges = set([e for e in neighboring_edges if 'rev_' not in e.label]) # Filtering out reverse edges made for the sake of making sure graph is strongly connected
             x, y, d, e = self.closestEdgeDistance(c, neighboring_edges)
             
             self.edge_sets[e].append(c)
@@ -124,7 +147,7 @@ class Grid:
         x, y = cell.position
         Px, Py = -1, -1
         d = np.Inf
-        edge_list = edges
+        edge_list = list(edges)
         
         edgeDistanceV = np.vectorize(self.edgeDistance)
         D = edgeDistanceV(edge_list, cell)
