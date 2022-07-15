@@ -7,7 +7,10 @@ class Cell:
         
         self.score = 0
         self.avg_travel_time = 0
+
         self.undeveloped = True
+        self.type = -1
+        self.type_color_rgb = (1,1,1)
         return
 
     # Links the cell to the road network by a given point and the edge it is contained in (by default closest point to the cell)
