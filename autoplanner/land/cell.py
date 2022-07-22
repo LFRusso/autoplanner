@@ -1,9 +1,10 @@
 class Cell:
-    def __init__(self, pos, idx):
+    def __init__(self, size, pos, idx):
         self.x = pos[0]
         self.y = pos[1]
         self.position = pos
         self.idx = idx
+        self.size = size
         
         self.score = 0
         self.avg_travel_time = 0
@@ -18,7 +19,12 @@ class Cell:
         self.mesh_distance = d
         if d==None:
             self.mesh_distance = self.distance(P, self.position)
-        
+
+        if d < self.size/2:
+            self.setDeveloped()
+            self.type_color_rgb = (0,0,0)
+            self.type = 0
+
         self.linked_position = P
         self.linked_edge = e
         return

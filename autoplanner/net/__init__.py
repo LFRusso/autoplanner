@@ -94,29 +94,30 @@ def loadNetSumo(netfile, geometry_nodes=True, v0=1):
     # Incorporating geometry points to the edge list 
     # Edges with geometry are replaced with a set of edge and geometry points are added
     removed_edges = []
-    for e in edge_objs:
-        shape = e.getRawShape()
-        if (len(shape)>2): # contains more than one line segment
+    if geometry_nodes:
+        for e in edge_objs:
+            shape = e.getRawShape()
+            if (len(shape)>2): # contains more than one line segment
 
-            # Points of the edge geometry are added as new geometry nodes
-            new_nodes_labels = [f"gnode_{e.getID()}_{i}" for i in range(len(shape[1:-1]))]
-            for n_label, n_pos in zip(new_nodes_labels, shape[1:-1]):
-                net.addNode(n_pos, n_label, geometry_point=True)
+                # Points of the edge geometry are added as new geometry nodes
+                new_nodes_labels = [f"gnode_{e.getID()}_{i}" for i in range(len(shape[1:-1]))]
+                for n_label, n_pos in zip(new_nodes_labels, shape[1:-1]):
+                    net.addNode(n_pos, n_label, geometry_point=True)
 
-            # Creating new edges by dividing the pre existing edge with geometry
-            # New edges have only one line segment
-            lenghts = [np.linalg.norm(np.array(shape[i]) - np.array(shape[i+1])) for i in range(len(shape)-1)]
-            speeds = [e.getSpeed() for i in range(len(shape)-1)]
-            new_edges = [(new_nodes_labels[i],new_nodes_labels[i+1]) for i in 
-                        range(len(new_nodes_labels)-1)]
-            new_edges = [(e.getFromNode().getID(), new_nodes_labels[0])] + new_edges +[(new_nodes_labels[-1], e.getToNode().getID())]
-            
-            for i in range(len(new_edges)):
-                net.addEdge(net.nodes[new_edges[i][0]], net.nodes[new_edges[i][1]], lenghts[i],
-                            speeds[i], f"gedge_{e.getID()}_{i}")
-            
-            # After being splitted, original edge is removed
-            removed_edges.append(e)
+                # Creating new edges by dividing the pre existing edge with geometry
+                # New edges have only one line segment
+                lenghts = [np.linalg.norm(np.array(shape[i]) - np.array(shape[i+1])) for i in range(len(shape)-1)]
+                speeds = [e.getSpeed() for i in range(len(shape)-1)]
+                new_edges = [(new_nodes_labels[i],new_nodes_labels[i+1]) for i in 
+                            range(len(new_nodes_labels)-1)]
+                new_edges = [(e.getFromNode().getID(), new_nodes_labels[0])] + new_edges +[(new_nodes_labels[-1], e.getToNode().getID())]
+                
+                for i in range(len(new_edges)):
+                    net.addEdge(net.nodes[new_edges[i][0]], net.nodes[new_edges[i][1]], lenghts[i],
+                                speeds[i], f"gedge_{e.getID()}_{i}")
+                
+                # After being splitted, original edge is removed
+                removed_edges.append(e)
     edge_objs = [e for e in edge_objs if e not in removed_edges]
 
     for e in edge_objs:

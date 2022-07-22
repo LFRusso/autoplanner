@@ -29,7 +29,7 @@ class Grid:
         self.cells = np.empty((self.lines, self.columns), dtype=Cell)
         for i in range(self.lines):
             for j in range(self.columns):
-                self.cells[i,j] = Cell((j*cell_size + cell_size/2, i*cell_size + cell_size/2), (i,j)) # 'Position' of the cell is set in its center
+                self.cells[i,j] = Cell(cell_size, (j*cell_size + cell_size/2, i*cell_size + cell_size/2), (i,j)) # 'Position' of the cell is set in its center
         for e in self.net.edges.values():
             self.edge_sets[e] = []
         self._getMeshDistances(searched_nodes) # Build edge_sets (cell neighborhoods) based on distance of each sell to each edge
