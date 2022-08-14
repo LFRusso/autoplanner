@@ -4,9 +4,9 @@ from collections import deque
 import random
 
 from tensorflow import keras
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
-from keras.optimizers import Adam
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
+from tensorflow.keras.optimizers import Adam
 
 class Agent:
     def __init__(self, env, memory_size=50000, min_memory_size=1000, batch_size=64, target_update_period=5, discount=0.99):
