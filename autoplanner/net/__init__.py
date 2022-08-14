@@ -11,7 +11,7 @@ from .node import Node
 from .edge import Edge
 
 class Net:
-    def __init__(self, offset, boundary, projection_parameters, v0=1):
+    def __init__(self, offset, boundary, projection_parameters, v0=5):
         self.offset = offset
         self.boundary = boundary
         self.projection = pyproj.Proj(projparams=projection_parameters)
@@ -23,7 +23,7 @@ class Net:
         self.graph = []
         self.dist_matrix = []
         return
-        
+
     def addNode(self, pos, label, geometry_point):
         self.nodes[label] = Node(pos, label, geometry_point)
         self.node_map[label] = len(self.node_map) 

@@ -42,12 +42,12 @@ class Grid:
         return
         
     def plotGrid(self, accessibility=False, links=False):
-        max_score = max([c.score for c in self.cells.flatten()])
+        max_accessibility = max([c.accessibility for c in self.cells.flatten()])
         if (accessibility):
             for i in range(self.lines):
                 for j in range(self.columns):
                     plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
-                                        self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].score/max_score,1.,1.-self.cells[i,j].score/max_score), alpha=.5))
+                                        self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].accessibility/max_accessibility,1.,1.-self.cells[i,j].accessibility/max_accessibility), alpha=.5))
         else:
             for i in range(self.lines):
                 for j in range(self.columns):
@@ -87,7 +87,13 @@ class Grid:
             
             c_avg_time = c_avg_time/card_C
             c.setAvgTime(c_avg_time)
-            c.setScore(1/c_avg_time)
+            c._updateAccessibility()
+
+        # Obtaining normalized accessibility
+        max_accessibility = max([c.accessibility for c in flattened_cells])
+        for c in flattened_cells:
+            c.norm_accessibility = c.accessibility/max_accessibility
+
         return
 
     # Total travel time spent inside a given edge when travelling to all cells linked to it 

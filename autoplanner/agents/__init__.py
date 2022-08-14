@@ -1,57 +1,98 @@
 import numpy as np
 from math import ceil, floor
+from collections import deque
+import random
+
+from tensorflow import keras
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
+from keras.optimizers import Adam
 
 class Agent:
-    def __init__(self, cell, view_radius):
-        self.cell = cell
-        self.view_radius = view_radius
-        self.x, self.y = cell.idx[0], cell.idx[1]
+    def __init__(self, env, memory_size=50000, min_memory_size=1000, batch_size=64, target_update_period=5, discount=0.99):
+        self.env = env
+        self.action_space_size = 8
+        self.batch_size = batch_size
+        self.target_update_period = target_update_period
+        self.discount = discount
 
-        self.dev_sites = []
-        self.dev_sites_scores = []
-        self.type_id = -1
-        self._setAgentTypeID()
-        return
-    
-    # To be implemented by different types of agents
-    def _setAgentTypeID(self):
-        return
+        self.model = self.createModel()
+
+        self.target_model = self.createModel()
+        self.target_model.set_weights(self.model.get_weights())
+        self.target_update_counter = 0
+
+        self.replay_memory = deque(maxlen=memory_size)
+        self.min_memory_size = min_memory_size
+
+        
+    def createModel(self):
+        model = Sequential()
+        model.add(Conv2D(258, (3,3), input_shape=(self.env.map.lines, self.env.map.columns, 1)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2,2))
+        model.add(Dropout(.2))
+
+        model.add(Conv2D(258, (3,3)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2,2))
+        model.add(Dropout(.2))
+
+        model.add(Flatten())
+        model.add(Dense(64))
+
+        model.add(Dense(self.action_space_size, activation="linear"))
+        model.compile(loss="mse", optimizer=Adam(learning_rate=.001), metrics=["accuracy"])
+
+        return model
+
+    def updateReplayMemory(self, transition):
+        self.replay_memory.append(transition)
+
+    def getQs(self, state):
+        return self.model.predict(np.array(state).reshape(-1, *state.shape)/11, verbose=False)[0]
+
+    def train(self, terminal_state, step):
+        if len(self.replay_memory) < self.min_memory_size:
+            return
+        
+        batch = random.sample(self.replay_memory, self.batch_size)
+
+        current_states = np.array([transition[0] for transition in batch])/11
+        current_qs_list = self.model.predict(current_states, verbose=False)
+
+        new_current_states = np.array([transition[3] for transition in batch])/11
+        future_qs_list = self.target_model.predict(new_current_states, verbose=False)
+
+        X, y = [], []
+        for index, (current_state, action, reward, new_current_state, done) in enumerate(batch):
+
+            if not done:
+                max_future_q = np.max(future_qs_list[index])
+                new_q = reward + self.discount * max_future_q
+            else:
+                new_q = reward
+
+            current_qs = current_qs_list[index]
+            current_qs[action] = new_q
+
+            X.append(current_state)
+            y.append(current_qs)
+
+        self.model.fit(np.array(X)/11, np.array(y), batch_size=self.batch_size, verbose=False, shuffle=False)
+
+        if terminal_state:
+            self.target_update_counter += 1
+
+        if self.target_update_counter > self.target_update_period:
+            self.target_model.set_weights(self.model.get_weights())
+            self.target_update_counter = 0
 
     # To be implemented by different types of agents 
-    def build(self):
-        self.cell.setDeveloped()
-        return
-
-    # To be implemented by different types of agents
-    def getScore(self, cell):
-        return cell.score
-
-    # Execute explore-build behavior
-    def interact(self, world):
-        neighborhood = self.lookAround(world.map).flatten()
-        self.updateDevSites(neighborhood)
-        next_cell, proffit = self.getNextCell(neighborhood)
-
-        if (next_cell==self.cell):
-            # build
-            self.build()
-        else:
-            # move to next
-            self.moveTo(next_cell)
-        return
-
-    # Selece neighboring cells from the one the agent is currently on
-    def lookAround(self, map):
-        close_cells = map.cells[max(self.x-self.view_radius,0) : min(self.x+self.view_radius+1, map.lines),
-                                max(self.y-self.view_radius,0) : min(self.y+self.view_radius+1, map.columns)]
-        return close_cells
-    
-    # Get the next cell by popping the top of the seen cells list
-    def getNextCell(self, cell_list):
-        next_cell, self.dev_sites = self.dev_sites[0], self.dev_sites[1:]
-        score, self.dev_sites_scores = self.dev_sites_scores[0], self.dev_sites_scores[1:]
-
-        return next_cell, score
+    def build(self, dev_type, map):
+        if self.cell.type == 0:
+            return
+        self.cell.setDeveloped(dev_type=dev_type, map=map)
 
     # Changes the agent current cell
     def moveTo(self, cell):
@@ -59,63 +100,41 @@ class Agent:
         self.x, self.y = cell.idx[0], cell.idx[1]
         return
 
-    # Adds more cells to the agents previously seen sites along with their score when last seen
-    def updateDevSites(self, new_sites):
-        new_sites = [site for site in new_sites if site.undeveloped]
-        for site in new_sites:
-            if (site not in self.dev_sites):
-                self.dev_sites = np.append(self.dev_sites, site)
-                self.dev_sites_scores = np.append(self.dev_sites_scores, self.getScore(site))
+    # Execute selected action
+    def playAction(self, action):
+        world = self.env
 
-        # Sort sites by score
-        sorted_idx = np.argsort(self.dev_sites_scores)[::-1]
-        self.dev_sites = self.dev_sites[sorted_idx]
-        self.dev_sites_scores = self.dev_sites_scores[sorted_idx]
+        if(action==0): # Right
+            next_cell = world.map.cells[self.x, (self.y+1)%world.map.columns]
+            self.moveTo(next_cell)
+        elif(action==1): # Left
+            next_cell = world.map.cells[self.x, self.y-1]
+            self.moveTo(next_cell)
+        elif(action==2): # Down
+            next_cell = world.map.cells[self.x-1, self.y]
+            self.moveTo(next_cell)
+        elif(action==3): # Up
+            next_cell = world.map.cells[(self.x+1)%world.map.lines, self.y]
+            self.moveTo(next_cell)
+        elif(action==4): # Build residential
+            self.build(dev_type=1, map=world.map)
+        elif(action==5): # Build commercial
+            self.build(dev_type=2, map=world.map)
+        elif(action==6): # Build industrial
+            self.build(dev_type=3, map=world.map)
+        elif(action==7): # Build recreational
+            self.build(dev_type=4, map=world.map)
 
-        # Removing bottom 10%
-        slc = ceil(len(self.dev_sites)*0.9)
-        self.dev_sites = self.dev_sites[:slc]
-        self.dev_sites_scores = self.dev_sites_scores[:slc]
-        return
-    
-class ResidentialBuilder(Agent):
-    def _setAgentTypeID(self):
-        self.type_id = 0
-        return
+    # Execute explore-build behavior
+    def interact(self, epsilon):
+        # Choosing next action 
 
-    def getScore(self, cell):
-        return cell.score
+        if np.random.random() > epsilon:
+            # Optimal action by Q table
+            action = np.argmax(self.getQs(self.env.getState()))
+        else:
+            # Random action
+            action = np.random.randint(0, self.action_space_size)
 
-    def build(self):
-        self.cell.type_color_rgb = (0,0,1)
-        self.cell.type = 0
-        self.cell.setDeveloped()
-        return
-
-class ComercialBuilder(Agent):
-    def _setAgentTypeID(self):
-        self.type_id = 1
-        return
-
-    def getScore(self, cell):
-        return cell.score
-
-    def build(self):
-        self.cell.type_color_rgb = (1,1,0)
-        self.cell.type = 1
-        self.cell.setDeveloped()
-        return
-
-class IndustrialBuilder(Agent):
-    def _setAgentTypeID(self):
-        self.type_id = 2
-        return
-
-    def getScore(self, cell):
-        return cell.score
-
-    def build(self):
-        self.cell.type_color_rgb = (1,0,0)
-        self.cell.type = 2
-        self.cell.setDeveloped()
-        return
+        self.playAction(action)
+        return action
