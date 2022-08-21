@@ -11,8 +11,6 @@ from .land import *
 class World:
     def __init__(self, map):
         self.map = map
-        self.original_map = deepcopy(map)
-
         self.agent = None
         return
 
@@ -37,7 +35,8 @@ class World:
 
     # Resets the map to its starting state
     def resetMap(self):
-        self.map = deepcopy(self.original_map)
+        for cell in self.map.cells.flatten():
+            cell.setUndeveloped()
 
     # Plots world
     def show(self, land_use=True, agent=False, accessibility=False, map_links=False):
@@ -74,22 +73,28 @@ class World:
             
             current_state = self.getState()
             for i in range(1, steps):
+                #print(i)
                 action = self.agent.interact(epsilon=epsilon)
                 new_state = self.getState()
                 reward = self.reward()
+                projected_rewards = [self.agent.prospectReward(act) for act in range(8)]
                 episode_reward += reward
 
-                self.agent.updateReplayMemory((current_state, action, reward, new_state, False))
+                self.agent.updateReplayMemory((current_state, action, reward, new_state, False, projected_rewards))
                 self.agent.train(terminal_state=False, step=step)
                 current_state = new_state
                 step += 1
+                #print(f"Chose action {action} current reward: {reward}\n\n")
 
-            action = self.agent.interact(epsilon=0.5)
+
+            action = self.agent.interact(epsilon=epsilon)
             new_state = self.getState()
             reward = self.reward()
+            projected_rewards = [self.agent.prospectReward(act) for act in range(8)]
             episode_reward += reward
+            #print(f"Chose action {action} current reward: {reward}\n\n")
 
-            self.agent.updateReplayMemory((current_state, action, reward, new_state, True))
+            self.agent.updateReplayMemory((current_state, action, reward, new_state, True, projected_rewards))
             self.agent.train(terminal_state=True, step=step)
             step += 1
 
@@ -98,8 +103,9 @@ class World:
                 epsilon = max(min_epsilon, epsilon)
 
             #self.show(land_use=True, agent=True, accessibility=False, map_links=False)
-            rewards.append(episode_reward)
+            rewards.append(reward)
     
         plt.plot(np.arange(1, len(rewards)+1), rewards)
+        #plt.savefig("teste_noite.png")
         plt.show()
-        return  
+        return self.agent.model, self.agent.target_model

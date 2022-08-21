@@ -9,7 +9,7 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activa
 from tensorflow.keras.optimizers import Adam
 
 class Agent:
-    def __init__(self, env, memory_size=50000, min_memory_size=1000, batch_size=64, target_update_period=5, discount=0.99):
+    def __init__(self, env, memory_size=50000, min_memory_size=1000, batch_size=64, target_update_period=1, discount=0.99):
         self.env = env
         self.action_space_size = 8
         self.batch_size = batch_size
@@ -61,11 +61,12 @@ class Agent:
         current_states = np.array([transition[0] for transition in batch])/11
         current_qs_list = self.model.predict(current_states, verbose=False)
 
-        new_current_states = np.array([transition[3] for transition in batch])/11
-        future_qs_list = self.target_model.predict(new_current_states, verbose=False)
+        #new_current_states = np.array([transition[3] for transition in batch])/11
+        #future_qs_list = self.target_model.predict(new_current_states, verbose=False)
+        future_qs_list = np.array([transition[5] for transition in batch])
 
         X, y = [], []
-        for index, (current_state, action, reward, new_current_state, done) in enumerate(batch):
+        for index, (current_state, action, reward, new_current_state, done, _) in enumerate(batch):
 
             if not done:
                 max_future_q = np.max(future_qs_list[index])
@@ -88,11 +89,29 @@ class Agent:
             self.target_model.set_weights(self.model.get_weights())
             self.target_update_counter = 0
 
-    # To be implemented by different types of agents 
     def build(self, dev_type, map):
         if self.cell.type == 0:
             return
         self.cell.setDeveloped(dev_type=dev_type, map=map)
+
+    def destroy(self):
+        if self.cell.type == 0:
+            return
+        self.cell.setUndeveloped()
+
+    def prospectReward(self, action):
+        if (action in [0, 1, 2, 3]): # movement actions do not change the reward
+            return self.env.reward()    
+        prev_type = self.cell.type
+        self.playAction(action)
+        reward = self.env.reward()
+
+        if (prev_type == -1):
+            self.destroy()
+        else:
+            self.build(prev_type, self.env.map)
+
+        return reward
 
     # Changes the agent current cell
     def moveTo(self, cell):
@@ -128,6 +147,8 @@ class Agent:
     # Execute explore-build behavior
     def interact(self, epsilon):
         # Choosing next action 
+        #for i in range(8):
+        #    print(f"For action {i} reward is {self.prospectReward(i)}")
 
         if np.random.random() > epsilon:
             # Optimal action by Q table

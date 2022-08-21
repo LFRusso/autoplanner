@@ -7,7 +7,7 @@ from tqdm import tqdm
 from .cell import Cell
 
 class Grid:
-    def __init__(self, width, height, cell_size, network=None, walking_weight_from=1, walking_weight_to=1, searched_nodes=1):
+    def __init__(self, width, height, cell_size, network=None, walking_weight_from=1, walking_weight_to=1, searched_nodes=1, K=5, weights="default"):
         start = time.time()
         print("Building cells...")
         self.width = width
@@ -29,7 +29,7 @@ class Grid:
         self.cells = np.empty((self.lines, self.columns), dtype=Cell)
         for i in range(self.lines):
             for j in range(self.columns):
-                self.cells[i,j] = Cell(cell_size, (j*cell_size + cell_size/2, i*cell_size + cell_size/2), (i,j)) # 'Position' of the cell is set in its center
+                self.cells[i,j] = Cell(cell_size, (j*cell_size + cell_size/2, i*cell_size + cell_size/2), (i,j), K, weights) # 'Position' of the cell is set in its center
         for e in self.net.edges.values():
             self.edge_sets[e] = []
         self._getMeshDistances(searched_nodes) # Build edge_sets (cell neighborhoods) based on distance of each sell to each edge
@@ -47,7 +47,9 @@ class Grid:
             for i in range(self.lines):
                 for j in range(self.columns):
                     plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
-                                        self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].accessibility/max_accessibility,1.,1.-self.cells[i,j].accessibility/max_accessibility), alpha=.5))
+                                        self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].norm_accessibility,1.,1.-self.cells[i,j].norm_accessibility), alpha=.5))
+                    #plt.gca().add_patch(plt.Rectangle((i*self.cell_size, j*self.cell_size), 
+                    #                    self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].norm_accessibility,1.-self.cells[i,j].norm_accessibility,1.-self.cells[i,j].norm_accessibility), alpha=.5))
         else:
             for i in range(self.lines):
                 for j in range(self.columns):

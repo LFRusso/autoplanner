@@ -19,9 +19,12 @@ class Cell:
         self.type_color_rgb = (1,1,1)
 
         if (weights == "default"):
-            self.W = {"Whh": 1, "Whc": 1, "Whi": 1, "Whr": 1, 
+            self.W = {"Whh": 1, "Whc": 1, "Whi": -1, "Whr": 1, 
                       "Wch": 1, "Wcc": 1,
                       "Wii": 1}
+        else:
+            self.W = weights
+
         return
 
     def _updateAccessibility(self):
@@ -119,6 +122,14 @@ class Cell:
         elif self.type == 4: # Recreational
             self.type_color_rgb = (0,1,0) 
             self.score = 0
+        
+    def setUndeveloped(self):
+        if (self.type==0):
+            return
+        self.type = -1
+        self.undeveloped = True
+        self.type_color_rgb = (1,1,1)
+        self.score = 0
 
     # Builds in the current cell while changin its own and vicinity scores 
     def setDeveloped(self, dev_type, map):
