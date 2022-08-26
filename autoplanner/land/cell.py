@@ -37,8 +37,9 @@ class Cell:
         if d==None:
             self.mesh_distance = self.distance(P, self.position)
 
-        if d < sqrt(2*self.size**2)/2:
-            self.setRoad()
+        # Reserve road land use (blocks other type of development in this cell)
+        #if d < sqrt(2*self.size**2)/2:
+        #    self.setRoad()
 
         self.linked_position = P
         self.linked_edge = e
@@ -55,7 +56,6 @@ class Cell:
         self.type = 0
         self.type_color_rgb = (0,0,0) 
         self.undeveloped = False
-        return
 
     def getResidentialScore(self, vicinity):
         flattened_vicinity = vicinity.flatten()

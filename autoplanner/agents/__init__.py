@@ -9,14 +9,17 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activa
 from tensorflow.keras.optimizers import Adam
 
 class Agent:
-    def __init__(self, env, memory_size=50000, min_memory_size=1000, batch_size=64, target_update_period=1, discount=0.99):
+    def __init__(self, env, model=None, memory_size=50000, min_memory_size=2000, batch_size=32, target_update_period=1, discount=0.99):
         self.env = env
         self.action_space_size = 8
         self.batch_size = batch_size
         self.target_update_period = target_update_period
         self.discount = discount
 
-        self.model = self.createModel()
+        if (model==None):
+            self.model = self.createModel()
+        else:
+            self.model = model
 
         self.target_model = self.createModel()
         self.target_model.set_weights(self.model.get_weights())
@@ -28,7 +31,7 @@ class Agent:
         
     def createModel(self):
         model = Sequential()
-        model.add(Conv2D(258, (3,3), input_shape=(self.env.map.lines, self.env.map.columns, 1)))
+        model.add(Conv2D(258, (3,3), input_shape=(self.env.map.columns, self.env.map.lines, 6)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2,2))
         model.add(Dropout(.2))
@@ -50,7 +53,7 @@ class Agent:
         self.replay_memory.append(transition)
 
     def getQs(self, state):
-        return self.model.predict(np.array(state).reshape(-1, *state.shape)/11, verbose=False)[0]
+        return self.model.predict(np.array(state).reshape(-1, *state.shape), verbose=False)[0]
 
     def train(self, terminal_state, step):
         if len(self.replay_memory) < self.min_memory_size:
@@ -58,12 +61,11 @@ class Agent:
         
         batch = random.sample(self.replay_memory, self.batch_size)
 
-        current_states = np.array([transition[0] for transition in batch])/11
+        current_states = np.array([transition[0] for transition in batch])
         current_qs_list = self.model.predict(current_states, verbose=False)
 
-        #new_current_states = np.array([transition[3] for transition in batch])/11
-        #future_qs_list = self.target_model.predict(new_current_states, verbose=False)
-        future_qs_list = np.array([transition[5] for transition in batch])
+        new_current_states = np.array([transition[3] for transition in batch])
+        future_qs_list = self.target_model.predict(new_current_states, verbose=False)
 
         X, y = [], []
         for index, (current_state, action, reward, new_current_state, done, _) in enumerate(batch):
@@ -80,7 +82,7 @@ class Agent:
             X.append(current_state)
             y.append(current_qs)
 
-        self.model.fit(np.array(X)/11, np.array(y), batch_size=self.batch_size, verbose=False, shuffle=False)
+        self.model.fit(np.array(X), np.array(y), batch_size=self.batch_size, verbose=False, shuffle=False)
 
         if terminal_state:
             self.target_update_counter += 1
@@ -105,6 +107,8 @@ class Agent:
         prev_type = self.cell.type
         self.playAction(action)
         reward = self.env.reward()
+
+        # To be implemented: cheking future rewards for n-step (improves training)
 
         if (prev_type == -1):
             self.destroy()

@@ -25,12 +25,18 @@ class World:
     def showParams(self):
         return
 
-    # Returns matrix representing the current state of the world
+    # Returns matrix representing the current state of the world 
     def getState(self):
-        state_matrix = np.matrix([[c.type+1 for c in line] for line in self.map.cells])
-        if (self.agent != None):
-            # Current agent position is represented by adding 6 to the entry where it stands
-            state_matrix[self.agent.x, self.agent.y] += 6
+        accessibility_matrix = np.matrix([[c.norm_accessibility for c in line] for line in self.map.cells])
+        residential_matrix = np.matrix([[1 if c.type==1 else 0 for c in line] for line in self.map.cells])
+        commercial_matrix = np.matrix([[1 if c.type==2 else 0 for c in line] for line in self.map.cells])
+        industrial_matrix = np.matrix([[1 if c.type==3 else 0 for c in line] for line in self.map.cells])
+        recreational_matrix = np.matrix([[1 if c.type==4 else 0 for c in line] for line in self.map.cells])
+        
+        agent_matrix = np.zeros((self.map.lines, self.map.columns))
+        agent_matrix[self.agent.x, self.agent.y] += 1
+
+        state_matrix = np.array([agent_matrix, residential_matrix, commercial_matrix, industrial_matrix, recreational_matrix, accessibility_matrix]).T
         return state_matrix
 
     # Resets the map to its starting state
@@ -57,8 +63,8 @@ class World:
         plt.show()
 
     # Runs the simulation, storing state of the world at the end
-    def run(self, episodes, steps=1000, epsilon=1, epsilon_decay=0.99975, min_epsilon=0.001):
-        self.agent = Agent(self)
+    def run(self, episodes, steps=1000, epsilon=1, epsilon_decay=0.99975, min_epsilon=0.001, model=None):
+        self.agent = Agent(self, model)
         cells = self.map.cells.flatten() # Randomly placing agent in the map
         
         rewards = []
