@@ -42,14 +42,11 @@ class Grid:
         return
         
     def plotGrid(self, accessibility=False, links=False):
-        max_accessibility = max([c.accessibility for c in self.cells.flatten()])
         if (accessibility):
             for i in range(self.lines):
                 for j in range(self.columns):
                     plt.gca().add_patch(plt.Rectangle((j*self.cell_size, i*self.cell_size), 
                                         self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].norm_accessibility,1.,1.-self.cells[i,j].norm_accessibility), alpha=.5))
-                    #plt.gca().add_patch(plt.Rectangle((i*self.cell_size, j*self.cell_size), 
-                    #                    self.cell_size, self.cell_size, ec="gray", fc=(1.-self.cells[i,j].norm_accessibility,1.-self.cells[i,j].norm_accessibility,1.-self.cells[i,j].norm_accessibility), alpha=.5))
         else:
             for i in range(self.lines):
                 for j in range(self.columns):
@@ -60,9 +57,6 @@ class Grid:
             for i in range(self.lines):
                 for j in range(self.columns):
                     plt.plot([self.cells[i,j].x, self.cells[i,j].linked_position[0]], [self.cells[i,j].y, self.cells[i,j].linked_position[1]])
-                    #plt.text(self.cells[i,j].x, self.cells[i,j].y, f"{round(self.cells[i,j].score, 2)}", fontsize="x-small")
-
-        return
 
     def _getCellScores(self):
         flattened_cells = self.cells.flatten()

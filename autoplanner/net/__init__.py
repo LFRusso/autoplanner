@@ -74,9 +74,6 @@ class Net:
     def plotNet(self):
         for e in self.edges.values():
             plt.plot([e.from_node.x, e.to_node.x], [e.from_node.y, e.to_node.y], color="black")
-            #plt.plot([e.from_node.y, e.to_node.y], [e.from_node.x, e.to_node.x], color="black")
-            #plt.plot([e.from_node.y, e.to_node.y], [e.from_node.x, e.to_node.x], color="black", marker='.',
-            #          markerfacecolor='gray', markersize=10)
         plt.axis("equal")
 
 

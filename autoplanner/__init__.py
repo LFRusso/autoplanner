@@ -1,4 +1,5 @@
 import random 
+from math import ceil
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
@@ -9,10 +10,24 @@ from .net import *
 from .land import *
 
 class World:
-    def __init__(self, map):
+    def __init__(self, map, view_radius=10):
         self.map = map
         self.agent = None
+        self.view_radius = view_radius
         return
+
+    def saveMap(self, filename):
+        land_uses = np.matrix([[c.type for c in line] for line in self.map.cells], dtype=int)
+        np.savetxt(filename, land_uses, delimiter=' ', fmt='%i')
+
+    def loadMap(self, filename):
+        land_uses = np.loadtxt(filename)
+        for i in range(land_uses.shape[0]):
+            for j in range(land_uses.shape[1]):
+                if (land_uses[i,j]!=-1):
+                    self.map.cells[i][j].setDeveloped(dev_type=land_uses[i,j], map=self.map)
+                else:    
+                    self.map.cells[i][j].setUndeveloped()
 
     def reward(self):
         reward = 0
@@ -27,16 +42,20 @@ class World:
 
     # Returns matrix representing the current state of the world 
     def getState(self):
-        accessibility_matrix = np.matrix([[c.norm_accessibility for c in line] for line in self.map.cells])
-        residential_matrix = np.matrix([[1 if c.type==1 else 0 for c in line] for line in self.map.cells])
-        commercial_matrix = np.matrix([[1 if c.type==2 else 0 for c in line] for line in self.map.cells])
-        industrial_matrix = np.matrix([[1 if c.type==3 else 0 for c in line] for line in self.map.cells])
-        recreational_matrix = np.matrix([[1 if c.type==4 else 0 for c in line] for line in self.map.cells])
-        
-        agent_matrix = np.zeros((self.map.lines, self.map.columns))
-        agent_matrix[self.agent.x, self.agent.y] += 1
+        padded_cells = np.pad(self.map.cells, 
+                        ((self.view_radius, self.view_radius), (self.view_radius, self.view_radius)))
 
-        state_matrix = np.array([agent_matrix, residential_matrix, commercial_matrix, industrial_matrix, recreational_matrix, accessibility_matrix]).T
+        x, y = self.agent.x + self.view_radius, self.agent.y + self.view_radius
+        observed_map = s = padded_cells[x - self.view_radius:x + self.view_radius+1, y - self.view_radius:y + self.view_radius+1]
+
+        accessibility_matrix = np.matrix([[c.norm_accessibility if c!=0 else 0 for c in line] for line in observed_map])
+        road_matrix = np.matrix([[1 if c != 0 and c.type==0 else 0 for c in line] for line in observed_map])
+        residential_matrix = np.matrix([[1 if c != 0 and c.type==1 else 0 for c in line] for line in observed_map])
+        commercial_matrix = np.matrix([[1 if c != 0 and c.type==2  else 0 for c in line] for line in observed_map])
+        industrial_matrix = np.matrix([[1 if c != 0 and c.type==3 else 0 for c in line] for line in observed_map])
+        recreational_matrix = np.matrix([[1 if c != 0 and c.type==4 else 0 for c in line] for line in observed_map])
+
+        state_matrix = np.array([road_matrix, residential_matrix, commercial_matrix, industrial_matrix, recreational_matrix, accessibility_matrix]).T
         return state_matrix
 
     # Resets the map to its starting state
@@ -44,34 +63,68 @@ class World:
         for cell in self.map.cells.flatten():
             cell.setUndeveloped()
 
+        # Reseting agent development queue
+        self.agent.devel_queue = self.agent.getDevelQueue()
+        starting_cell = self.agent.devel_queue.pop(0)
+        self.agent.moveTo(starting_cell)
+
     # Plots world
-    def show(self, land_use=True, agent=False, accessibility=False, map_links=False):
+    def show(self, land_use=True, agent=False, accessibility=False, map_links=False, color=False, net=False, legends=True):
+        plt.axis("equal")
         self.map.plotGrid(accessibility=accessibility, links=map_links)
 
-        self.map.net.plotNet()
+        # Show original road network on top of map
+        if(net):
+            self.map.net.plotNet()
 
+        # Color cells based on land use
         if (land_use):
             for i in range(self.map.lines):
                 for j in range(self.map.columns):
                     if (self.map.cells[i,j].undeveloped==False):
-                        plt.gca().add_patch(plt.Rectangle((j*self.map.cell_size, i*self.map.cell_size), 
-                                            self.map.cell_size, self.map.cell_size, ec="gray", fc=self.map.cells[i,j].type_color_rgb, alpha=.7))
+                        if (color or self.map.cells[i,j].type==0):
+                            plt.gca().add_patch(plt.Rectangle((j*self.map.cell_size, i*self.map.cell_size), 
+                                                self.map.cell_size, self.map.cell_size, ec="gray", fc=self.map.cells[i,j].type_color_rgb, alpha=.7))
+                        else:
+                            plt.gca().add_patch(plt.Rectangle((j*self.map.cell_size, i*self.map.cell_size), 
+                                                self.map.cell_size, self.map.cell_size, ec="k", fill=False, hatch=self.map.cells[i,j].hatch))
 
+        # Adding custom legends
+        if (legends):
+            leg = plt.legend(['Undeveloped', 'Residential', 'Commercial', 'Industrial', 'Recreational', 'Road'], framealpha=1,
+                            fontsize=10, frameon=False, handleheight=2.6, loc='lower right', bbox_to_anchor=(0.85, 0))
+            if (color==False):
+                hatches=[None, '...', '///', 'xx', 'OO', None]
+                for i, lh in enumerate(leg.legendHandles):
+                    lh.set_hatch(hatches[i])
+                    lh.set_alpha(1)
+            else:
+                colors=['white', 'blue', 'yellow', 'red', 'limegreen', None]
+                for i, lh in enumerate(leg.legendHandles):
+                    lh.set_color(colors[i])
+                    lh.set_edgecolor('gray')
+                    lh.set_alpha(1)
+
+            lh = leg.legendHandles[-1]
+            lh.set_color('k')
+
+        # Plot agent location
         if (agent and self.agent!=None):
             x, y = self.agent.cell.position
             plt.scatter(x, y, color="red")
+        
+        plt.title(f"Reward: {self.reward()}")
+        plt.autoscale()
+        plt.margins(0)
+        plt.axis('off')
         plt.show()
 
     # Runs the simulation, storing state of the world at the end
     def run(self, episodes, steps=1000, epsilon=1, epsilon_decay=0.99975, min_epsilon=0.001, model=None):
         self.agent = Agent(self, model)
-        cells = self.map.cells.flatten() # Randomly placing agent in the map
         
         rewards = []
-
         for episode in tqdm(range(1, episodes + 1), ascii=True, unit='episodes'):
-            starting_cell = random.choice(cells)
-            self.agent.moveTo(starting_cell)
             self.resetMap()
 
             episode_reward = 0
@@ -79,39 +132,57 @@ class World:
             
             current_state = self.getState()
             for i in range(1, steps):
-                #print(i)
-                action = self.agent.interact(epsilon=epsilon)
+                action, terminal_state = self.agent.interact(epsilon=epsilon)
                 new_state = self.getState()
                 reward = self.reward()
                 projected_rewards = [self.agent.prospectReward(act) for act in range(8)]
                 episode_reward += reward
 
                 self.agent.updateReplayMemory((current_state, action, reward, new_state, False, projected_rewards))
-                self.agent.train(terminal_state=False, step=step)
+                self.agent.train(terminal_state=terminal_state, step=step)
                 current_state = new_state
                 step += 1
-                #print(f"Chose action {action} current reward: {reward}\n\n")
 
+                if terminal_state:
+                    break
 
-            action = self.agent.interact(epsilon=epsilon)
-            new_state = self.getState()
-            reward = self.reward()
-            projected_rewards = [self.agent.prospectReward(act) for act in range(8)]
-            episode_reward += reward
-            #print(f"Chose action {action} current reward: {reward}\n\n")
+            if not terminal_state: # Agent did not reach terminal state by completing map; terminal by number of iterations
 
-            self.agent.updateReplayMemory((current_state, action, reward, new_state, True, projected_rewards))
-            self.agent.train(terminal_state=True, step=step)
-            step += 1
+                action, terminal_state = self.agent.interact(epsilon=epsilon)
+                new_state = self.getState()
+                reward = self.reward()
+                projected_rewards = [self.agent.prospectReward(act) for act in range(8)]
+                episode_reward += reward
+
+                self.agent.updateReplayMemory((current_state, action, reward, new_state, True, projected_rewards))
+                self.agent.train(terminal_state=True, step=step)
+                step += 1
 
             if epsilon > min_epsilon:
                 epsilon *= epsilon_decay
                 epsilon = max(min_epsilon, epsilon)
 
-            #self.show(land_use=True, agent=True, accessibility=False, map_links=False)
             rewards.append(reward)
     
-        plt.plot(np.arange(1, len(rewards)+1), rewards)
-        #plt.savefig("teste_noite.png")
-        plt.show()
         return self.agent.model, self.agent.target_model
+
+
+    # Runs always choosing the best immediate action
+    def runGreedy(self, steps=1000):
+        self.agent = Agent(self)
+
+        for i in range(1, steps):
+            action, terminal_state = self.agent.greedyInteract()
+            if (terminal_state):
+                break
+        return
+
+    # Runs choosing random action
+    def runRandom(self, steps=1000):
+        self.agent = Agent(self)
+
+        for i in range(1, steps):
+            action, terminal_state = self.agent.randomInteract()
+            if (terminal_state):
+                break
+        return

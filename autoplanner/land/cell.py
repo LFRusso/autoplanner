@@ -17,6 +17,7 @@ class Cell:
         self.undeveloped = True
         self.type = -1
         self.type_color_rgb = (1,1,1)
+        self.hatch = None
 
         if (weights == "default"):
             self.W = {"Whh": 1, "Whc": 1, "Whi": -1, "Whr": 1, 
@@ -38,8 +39,8 @@ class Cell:
             self.mesh_distance = self.distance(P, self.position)
 
         # Reserve road land use (blocks other type of development in this cell)
-        #if d < sqrt(2*self.size**2)/2:
-        #    self.setRoad()
+        if d < sqrt(2*self.size**2)/2:
+            self.setRoad()
 
         self.linked_position = P
         self.linked_edge = e
@@ -60,7 +61,7 @@ class Cell:
     def getResidentialScore(self, vicinity):
         flattened_vicinity = vicinity.flatten()
 
-        res, com, ind, rec = 0, 0, 0, 0
+        res, com, ind, rec = -1, 0, 0, 0
         for c in flattened_vicinity:
             res += 1 if c.type==1 else 0
             com += 1 if c.type==2 else 0
@@ -73,7 +74,7 @@ class Cell:
     def getCommercialScore(self, vicinity):
         flattened_vicinity = vicinity.flatten()
 
-        res, com  = 0, 0
+        res, com  = 0, -1
         for c in flattened_vicinity:
             res += 1 if c.type==1 else 0
             com += 1 if c.type==2 else 0
@@ -85,11 +86,11 @@ class Cell:
     def getIndustrialScore(self, vicinity):
         flattened_vicinity = vicinity.flatten()
 
-        ind = 0
+        ind = -1
         for c in flattened_vicinity:
             ind += 1 if c.type==3 else 0
 
-        si = self.norm_accessibility*(self.W["Wii"]*ind)/self.K**2
+        si = exp(-0.1*self.mesh_distance)*(self.W["Wii"]*ind)/self.K**2
         return si
 
 
@@ -101,26 +102,32 @@ class Cell:
         
         if self.type == -1: # Undeveloped
             self.type_color_rgb = (1,1,1)
+            self.hatch = None
             self.score = 0
 
         elif self.type == 0: # Road
             self.type_color_rgb = (0,0,0)
+            self.hatch = None
             self.score = 0
 
         elif self.type == 1: # Residential
             self.type_color_rgb = (0,0,1)
+            self.hatch = '...'
             self.score = self.getResidentialScore(vicinity)
  
         elif self.type == 2: # Commercial
             self.type_color_rgb = (1,1,0) 
+            self.hatch = '///'
             self.score = self.getCommercialScore(vicinity)
 
         elif self.type == 3: # Industrial
             self.type_color_rgb = (1,0,0) 
+            self.hatch = 'xx'
             self.score = self.getIndustrialScore(vicinity)
 
         elif self.type == 4: # Recreational
             self.type_color_rgb = (0,1,0) 
+            self.hatch = 'OO'
             self.score = 0
         
     def setUndeveloped(self):

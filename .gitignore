@@ -2,8 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
-test/model*/
-test/target_model*/
+test/models/*
+test/data/*
+test/*.dat
 
 # C extensions
 *.so
