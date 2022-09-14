@@ -3,11 +3,12 @@ import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 import time
 from tqdm import tqdm
+import pickle
 
 from .cell import Cell
 
 class Grid:
-    def __init__(self, width, height, cell_size, network=None, walking_weight_from=1, walking_weight_to=1, searched_nodes=1, K=5, weights="default"):
+    def __init__(self, width, height, cell_size, network, walking_weight_from=1, walking_weight_to=1, searched_nodes=1, K=5, weights="default"):
         start = time.time()
         print("Building cells...")
         self.width = width

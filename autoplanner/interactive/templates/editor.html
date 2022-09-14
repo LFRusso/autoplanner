@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+{% endblock %}
+{% block body %}
+<h2>Map Editor</h2>
+
+<div class="container">
+    <div id="editor">
+        <svg id="fig"></svg>
+        <hr>
+        <h4 id="reward"></h4>
+    </div>
+    <div>
+        <strong>Map weights</strong>
+        <br>
+        <input type="text" id="weights"><br>
+    </div>
+    <br>
+    <button type="button" id="reset-btn" class="btn btn-danger">Reset</button>
+    <button type="button" id="save-btn" class="btn btn-success">Save</button>
+</div>
+
+
+<script>
+    let map = JSON.parse('{{ map | tojson }}');
+    let original_map = JSON.parse('{{ map | tojson }}');
+    let scores = JSON.parse('{{ scores | tojson }}');
+    let accessibilities = JSON.parse('{{ accessibilities | tojson }}');
+    let norm_accessibilities = JSON.parse('{{ norm_accessibilities | tojson }}');
+    let mesh_distances = JSON.parse('{{ mesh_distances | tojson }}');
+    let view_radius = JSON.parse('{{ view_radius | tojson }}');
+    let weights = JSON.parse('{{ weights | tojson }}');
+    let width = '{{ width }}';
+    let height = '{{ height }}';
+</script>
+<script type="text/javascript" src="{{ url_for('static', filename='scripts/editor.js') }}"></script>
+{% endblock %}

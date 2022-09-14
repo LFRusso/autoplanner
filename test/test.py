@@ -18,7 +18,8 @@ W = {"Whh": 1, "Whc": 2, "Whi": -3, "Whr": 6,
 land = ap.land.Grid(w, h, 21, network=net, walking_weight_from=1, 
                     walking_weight_to=1, searched_nodes=50, K=5, weights=W)
 
-world = ap.World(land, view_radius=5)
+world = ap.World(view_radius=5)
+world.add_map(land)
 
 mode = 2
 if mode==0: #Train
@@ -42,14 +43,14 @@ elif mode==3: # Random
     world.runRandom(steps=100000)
     world.show(land_use=True, agent=False, accessibility=False, map_links=False, color=True)
     
-elif mode==4: # Write
-    world.runGreedy(steps=10000)
-    world.show(land_use=True, agent=False, accessibility=False, map_links=False, color=True)
-    R = world.reward()
-    world.saveMap("map.dat")
+elif mode==4: # Write # OLD
+    #world.runGreedy(steps=10000)
+    #world.show(land_use=True, agent=False, accessibility=False, map_links=False, color=True)
+    #R = world.reward()
+    #world.saveMap("map.dat")
     
-elif mode==5: # Read
-    world.loadMap("map.dat")
-    world.show(land_use=True, agent=False, accessibility=False, map_links=False, color=True)
-    R = world.reward()
-    print(R)
+elif mode==5: # Read # OLD
+    #world.loadMap("map.dat")
+    #world.show(land_use=True, agent=False, accessibility=False, map_links=False, color=True)
+    #R = world.reward()
+    #print(R)
